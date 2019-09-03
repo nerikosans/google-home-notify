@@ -1,10 +1,12 @@
 import os
+import time
 from os.path import join, dirname
 from dotenv import load_dotenv
 import pychromecast
 from google.cloud import storage
 from google.cloud import texttospeech
 from datetime import timedelta
+from mutagen.mp3 import MP3
 
 dotenv_path = join(dirname(__file__), '.env')
 load_dotenv(dotenv_path)
@@ -16,6 +18,10 @@ bucket = gcs_cli.get_bucket(os.environ.get('BUCKET_NAME'))
 
 tts_cli = texttospeech.TextToSpeechClient.from_service_account_json(
     account_json)
+
+filename = 'audio.mp3'
+filepath = f'tts-audio/{filename}'
+filepath_local = f'./tts-audio/{filename}'
 
 
 def find_device(ip_addr):
@@ -50,10 +56,6 @@ def make_synthesis_args(
 
 
 def generate_audio_url(text, audio_config=None):
-    filename = 'audio.mp3'
-    filepath = f'tts-audio/{filename}'
-    filepath_local = f'./tts-audio/{filename}'
-
     if audio_config is None:
         audio_config = {}
 
@@ -72,11 +74,25 @@ def generate_audio_url(text, audio_config=None):
 
 
 if __name__ == '__main__':
+    text = '今日も1日がんばるぞい！'
+    volume_speak = 0.2
+
+    # Find device
     home = find_device(os.environ.get('IP_ADDR'))
     home.wait()
 
-    audio_url = generate_audio_url(text='できました', audio_config={
+    # Remember original media volume
+    volume_orig = home.status.volume_level
+    home.set_volume(volume_speak)
+
+    # Send voice
+    audio_url = generate_audio_url(text=text, audio_config={
         'speed': 1.4,
     })
-
     send_sound(home, audio_url)
+
+    # Wait for end of speaking
+    time.sleep(5 + MP3(filepath_local).info.length)
+
+    # Set volume back
+    home.set_volume(volume_orig)
